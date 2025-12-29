@@ -2,21 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3D Interactive Circuit</title>
+    <title>Realistic 3D Circuit</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', sans-serif; }
-        #controls { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); padding: 15px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        button { cursor: pointer; padding: 10px; margin-top: 5px; width: 100%; border: none; border-radius: 5px; font-weight: bold; }
-        .active { background: #007bff; color: white; }
-        #status { margin-top: 10px; font-weight: bold; color: #d00; }
+        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: sans-serif; }
+        #ui { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.7); color: white; padding: 20px; border-radius: 12px; border: 1px solid #444; pointer-events: none; }
+        .btn-container { pointer-events: auto; margin-top: 10px; }
+        button { background: #444; color: white; border: none; padding: 10px; cursor: pointer; border-radius: 5px; width: 100%; }
+        button.active { background: #28a745; }
+        .label { font-size: 12px; color: #aaa; margin-bottom: 5px; }
     </style>
 </head>
 <body>
 
-<div id="controls">
-    <h3>⚡ Circuit Lab</h3>
-    <button id="wireBtn">1. Connect Wires: OFF</button>
-    <div id="status">Circuit: Open (Off)</div>
+<div id="ui">
+    <div style="font-weight: bold; font-size: 18px;">⚡ Pro Circuit Lab</div>
+    <div class="label">Drag parts to move • Click switch to toggle</div>
+    <div class="btn-container">
+        <button id="wireBtn">Mode: Move Parts</button>
+    </div>
+    <div id="status" style="margin-top:10px; color: #ffcc00;">Status: Open Circuit</div>
 </div>
 
 <script type="importmap">
@@ -27,147 +31,168 @@
     import * as THREE from 'three';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
+    // SCENE SETUP
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 10, 12);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 12, 15);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
     document.body.appendChild(renderer.domElement);
 
-    const light = new THREE.PointLight(0xffffff, 50, 100);
-    light.position.set(0, 10, 0);
-    scene.add(light, new THREE.AmbientLight(0xffffff, 0.4));
-    scene.add(new THREE.GridHelper(20, 20, 0x333333, 0x222222));
+    // LIGHTING
+    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambient);
+    const sun = new THREE.DirectionalLight(0xffffff, 1);
+    sun.position.set(5, 10, 5);
+    scene.add(sun);
+
+    const grid = new THREE.GridHelper(20, 20, 0x333333, 0x222222);
+    scene.add(grid);
 
     const components = [];
     const wires = [];
     const electrons = [];
-    let isWireMode = false;
-    let selectedForWire = null;
-    let isPowered = false;
+    let wireMode = false;
+    let firstPart = null;
+    let switchOn = false;
 
-    // --- CREATING MODELS ---
-    function createPart(type, color, x, z) {
+    // --- MODEL BUILDERS ---
+
+    function createBattery(x, z) {
         const group = new THREE.Group();
-        const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 1.5), new THREE.MeshStandardMaterial({color: 0x444444}));
-        group.add(base);
-
-        let mainPart;
-        if (type === 'battery') {
-            mainPart = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.2), new THREE.MeshStandardMaterial({color: 0xaa0000}));
-            mainPart.rotation.z = Math.PI/2;
-        } else if (type === 'bulb') {
-            mainPart = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshStandardMaterial({color: 0x555555, transparent: true, opacity: 0.8}));
-            const pointLight = new THREE.PointLight(0xffff00, 0, 5);
-            group.add(pointLight);
-            group.userData.light = pointLight;
-        } else if (type === 'switch') {
-            mainPart = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), new THREE.MeshStandardMaterial({color: 0x888888}));
-            mainPart.position.y = 0.4;
-        }
-
-        mainPart.position.y = 0.5;
-        group.add(mainPart);
-        group.position.set(x, 0, z);
-        group.userData.type = type;
-        group.userData.main = mainPart;
-        scene.add(group);
-        components.push(group);
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2), new THREE.MeshStandardMaterial({color: 0x222222}));
+        body.rotation.z = Math.PI/2;
+        const copper = new THREE.Mesh(new THREE.CylinderGeometry(0.51, 0.51, 0.6), new THREE.MeshStandardMaterial({color: 0xb87333}));
+        copper.rotation.z = Math.PI/2; copper.position.x = 0.7;
+        const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({color: 0xaaaaaa}));
+        tip.rotation.z = Math.PI/2; tip.position.x = 1.1;
+        group.add(body, copper, tip);
+        group.position.set(x, 0.5, z);
+        group.userData.type = "battery";
         return group;
     }
 
-    const bat = createPart('battery', 0xff0000, -4, 0);
-    const bul = createPart('bulb', 0xffff00, 0, 0);
-    const swi = createPart('switch', 0x888888, 4, 0);
+    function createBulb(x, z) {
+        const group = new THREE.Group();
+        // Holder
+        const holder = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.2, 16, 32), new THREE.MeshStandardMaterial({color: 0x777777}));
+        holder.rotation.x = Math.PI/2;
+        // Glass
+        const glass = new THREE.Mesh(new THREE.SphereGeometry(0.6, 32, 32), new THREE.MeshStandardMaterial({color: 0xffffff, transparent: true, opacity: 0.3}));
+        glass.position.y = 0.8;
+        // Filament
+        const fil = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial({color: 0x333300}));
+        fil.position.y = 0.8;
+        const light = new THREE.PointLight(0xffff00, 0, 10);
+        light.position.y = 0.8;
+        group.add(holder, glass, fil, light);
+        group.position.set(x, 0.2, z);
+        group.userData = { type: "bulb", light: light, fil: fil };
+        return group;
+    }
 
-    // --- INTERACTION ---
+    function createSwitch(x, z) {
+        const group = new THREE.Group();
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 1.5), new THREE.MeshStandardMaterial({color: 0x333333}));
+        const leverGroup = new THREE.Group();
+        const lever = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.2, 0.1), new THREE.MeshStandardMaterial({color: 0xcccccc}));
+        lever.position.y = 0.6;
+        leverGroup.add(lever);
+        group.add(base, leverGroup);
+        group.position.set(x, 0.1, z);
+        group.userData = { type: "switch", lever: leverGroup };
+        return group;
+    }
+
+    const bat = createBattery(-5, 0);
+    const bul = createBulb(0, 0);
+    const swi = createSwitch(5, 0);
+    [bat, bul, swi].forEach(p => { scene.add(p); components.push(p); });
+
+    // --- LOGIC ---
+
     const drag = new DragControls(components, camera, renderer.domElement);
-    drag.addEventListener('dragstart', () => isWireMode = false); // Disable drag during wire mode
-    drag.addEventListener('dragend', (e) => {
-        e.object.position.x = Math.round(e.object.position.x);
-        e.object.position.z = Math.round(e.object.position.z);
-        updateWires();
-    });
+    drag.addEventListener('dragend', () => updateWires());
 
     document.getElementById('wireBtn').onclick = (e) => {
-        isWireMode = !isWireMode;
-        e.target.textContent = isWireMode ? "1. Connect Wires: ON" : "1. Connect Wires: OFF";
+        wireMode = !wireMode;
+        e.target.textContent = wireMode ? "Mode: Connect Wires" : "Mode: Move Parts";
         e.target.classList.toggle('active');
-        selectedForWire = null;
+        firstPart = null;
     };
 
     window.addEventListener('click', (event) => {
-        if (!isWireMode) return;
         const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
         const ray = new THREE.Raycaster();
         ray.setFromCamera(mouse, camera);
-        const hit = ray.intersectObjects(components, true);
+        const hits = ray.intersectObjects(components, true);
 
-        if (hit.length > 0) {
-            let obj = hit[0].object;
+        if (hits.length > 0) {
+            let obj = hits[0].object;
             while(obj.parent !== scene) obj = obj.parent;
-            if (!selectedForWire) selectedForWire = obj;
-            else if (selectedForWire !== obj) {
-                addWire(selectedForWire, obj);
-                selectedForWire = null;
-                checkCircuit();
+
+            if (wireMode) {
+                if (!firstPart) firstPart = obj;
+                else if (firstPart !== obj) {
+                    addWire(firstPart, obj);
+                    firstPart = null;
+                }
+            } else if (obj.userData.type === "switch") {
+                switchOn = !switchOn;
+                obj.userData.lever.rotation.z = switchOn ? -0.8 : 0;
             }
         }
     });
 
     function addWire(a, b) {
-        const mat = new THREE.LineBasicMaterial({ color: 0x4444ff });
-        const geo = new THREE.BufferGeometry().setFromPoints([a.position, b.position]);
-        const line = new THREE.Line(geo, mat);
-        line.userData = { from: a, to: b };
-        scene.add(line);
-        wires.push(line);
+        const curve = new THREE.LineCurve3(a.position, b.position);
+        const geo = new THREE.TubeGeometry(curve, 20, 0.08, 8, false);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x0066ff });
+        const wire = new THREE.Mesh(geo, mat);
+        wire.userData = { from: a, to: b };
+        scene.add(wire);
+        wires.push(wire);
     }
 
     function updateWires() {
-        wires.forEach(w => w.geometry.setFromPoints([w.userData.from.position, w.userData.to.position]));
+        wires.forEach(w => {
+            w.geometry.dispose();
+            w.geometry = new THREE.TubeGeometry(new THREE.LineCurve3(w.userData.from.position, w.userData.to.position), 20, 0.08, 8, false);
+        });
     }
 
-    function checkCircuit() {
-        // Simple logic: if we have 3 wires, assume it's a loop for this demo
-        if (wires.length >= 3) {
-            isPowered = true;
-            document.getElementById('status').textContent = "Circuit: CLOSED (Working!)";
-            document.getElementById('status').style.color = "#0f0";
-            bul.userData.main.material.color.set(0xffff00);
-            bul.userData.light.intensity = 20;
-        }
-    }
-
-    // --- ANIMATION & ELECTRONS ---
-    let frame = 0;
+    // --- LOOP ---
+    let t = 0;
     function animate() {
         requestAnimationFrame(animate);
-        frame += 0.05;
+        t += 0.02;
 
-        if (isPowered && frame % 10 < 0.5) {
+        const isComplete = wires.length >= 3 && switchOn;
+        
+        // Update Bulb Visuals
+        bul.userData.light.intensity = isComplete ? 50 : 0;
+        bul.userData.fil.material.emissive.setHex(isComplete ? 0xffff00 : 0x000000);
+        document.getElementById('status').textContent = isComplete ? "Status: Flowing ⚡" : (switchOn ? "Status: Incomplete Circuit" : "Status: Switch OFF");
+        document.getElementById('status').style.color = isComplete ? "#00ff00" : "#ffcc00";
+
+        // Electrons
+        if (isComplete && Math.random() > 0.8) {
             wires.forEach(w => {
-                const elGeo = new THREE.SphereGeometry(0.1);
-                const elMat = new THREE.MeshBasicMaterial({color: 0xffff00});
-                const el = new THREE.Mesh(elGeo, elMat);
+                const el = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshBasicMaterial({color: 0x00ffff}));
                 scene.add(el);
-                electrons.push({ mesh: el, wire: w, progress: 0 });
+                electrons.push({ mesh: el, wire: w, p: 0 });
             });
         }
 
         for (let i = electrons.length - 1; i >= 0; i--) {
             const e = electrons[i];
-            e.progress += 0.02;
-            const start = e.wire.userData.from.position;
-            const end = e.wire.userData.to.position;
-            e.mesh.position.lerpVectors(start, end, e.progress);
-            e.mesh.position.y = 0.5; // Stay above ground
-            if (e.progress >= 1) {
-                scene.remove(e.mesh);
-                electrons.splice(i, 1);
-            }
+            e.p += 0.03;
+            e.mesh.position.lerpVectors(e.wire.userData.from.position, e.wire.userData.to.position, e.p);
+            e.mesh.position.y += 0.2; // float above wire
+            if (e.p >= 1) { scene.remove(e.mesh); electrons.splice(i, 1); }
         }
 
         renderer.render(scene, camera);
