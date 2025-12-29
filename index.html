@@ -2,120 +2,177 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Circuit Builder</title>
+    <title>3D Interactive Circuit</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; }
-        #ui {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 15px;
-            border-radius: 8px;
-            pointer-events: none;
-        }
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; background: #111; font-family: 'Segoe UI', sans-serif; }
+        #controls { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); padding: 15px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        button { cursor: pointer; padding: 10px; margin-top: 5px; width: 100%; border: none; border-radius: 5px; font-weight: bold; }
+        .active { background: #007bff; color: white; }
+        #status { margin-top: 10px; font-weight: bold; color: #d00; }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <h2>3D Circuit Builder</h2>
-    <p>Drag the components to move them.<br>They will snap to the grid!</p>
-    <ul style="list-style: none; padding: 0;">
-        <li><span style="color: red;">■</span> Battery</li>
-        <li><span style="color: blue;">■</span> Resistor</li>
-        <li><span style="color: green;">■</span> LED</li>
-    </ul>
+<div id="controls">
+    <h3>⚡ Circuit Lab</h3>
+    <button id="wireBtn">1. Connect Wires: OFF</button>
+    <div id="status">Circuit: Open (Off)</div>
 </div>
 
 <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-        }
-    }
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
 </script>
 
 <script type="module">
     import * as THREE from 'three';
     import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    // 1. SETUP SCENE
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
-    
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(5, 5, 10);
+    camera.position.set(0, 10, 12);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // 2. LIGHTS
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(5, 10, 7);
-    scene.add(directionalLight);
+    const light = new THREE.PointLight(0xffffff, 50, 100);
+    light.position.set(0, 10, 0);
+    scene.add(light, new THREE.AmbientLight(0xffffff, 0.4));
+    scene.add(new THREE.GridHelper(20, 20, 0x333333, 0x222222));
 
-    // 3. GRID & FLOOR
-    const grid = new THREE.GridHelper(20, 20);
-    scene.add(grid);
+    const components = [];
+    const wires = [];
+    const electrons = [];
+    let isWireMode = false;
+    let selectedForWire = null;
+    let isPowered = false;
 
-    // 4. COMPONENTS (The blocks)
-    const objects = [];
-    const componentData = [
-        { name: "Battery", color: 0xff0000, pos: [-2, 0.5, 0] },
-        { name: "Resistor", color: 0x0000ff, pos: [0, 0.5, 0] },
-        { name: "LED", color: 0x00ff00, pos: [2, 0.5, 0] }
-    ];
+    // --- CREATING MODELS ---
+    function createPart(type, color, x, z) {
+        const group = new THREE.Group();
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 1.5), new THREE.MeshStandardMaterial({color: 0x444444}));
+        group.add(base);
 
-    componentData.forEach(data => {
-        const geometry = new THREE.BoxGeometry(1, 1, 1);
-        const material = new THREE.MeshStandardMaterial({ color: data.color });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(...data.pos);
-        mesh.userData.name = data.name;
-        scene.add(mesh);
-        objects.push(mesh);
-    });
+        let mainPart;
+        if (type === 'battery') {
+            mainPart = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.2), new THREE.MeshStandardMaterial({color: 0xaa0000}));
+            mainPart.rotation.z = Math.PI/2;
+        } else if (type === 'bulb') {
+            mainPart = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshStandardMaterial({color: 0x555555, transparent: true, opacity: 0.8}));
+            const pointLight = new THREE.PointLight(0xffff00, 0, 5);
+            group.add(pointLight);
+            group.userData.light = pointLight;
+        } else if (type === 'switch') {
+            mainPart = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), new THREE.MeshStandardMaterial({color: 0x888888}));
+            mainPart.position.y = 0.4;
+        }
 
-    // 5. DRAG AND DROP LOGIC
-    const controls = new DragControls(objects, camera, renderer.domElement);
-
-    // When we start dragging, disable camera movement (if we had any)
-    controls.addEventListener('dragstart', function (event) {
-        event.object.material.emissive.set(0x333333);
-    });
-
-    // When we stop dragging, snap to the grid
-    controls.addEventListener('dragend', function (event) {
-        event.object.material.emissive.set(0x000000);
-        
-        // Grid Snapping Logic
-        event.object.position.x = Math.round(event.object.position.x);
-        event.object.position.z = Math.round(event.object.position.z);
-        event.object.position.y = 0.5; // Keep it on the floor
-    });
-
-    // 6. ANIMATION LOOP
-    function animate() {
-        requestAnimationFrame(animate);
-        renderer.render(scene, camera);
+        mainPart.position.y = 0.5;
+        group.add(mainPart);
+        group.position.set(x, 0, z);
+        group.userData.type = type;
+        group.userData.main = mainPart;
+        scene.add(group);
+        components.push(group);
+        return group;
     }
 
-    // Handle Window Resize
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+    const bat = createPart('battery', 0xff0000, -4, 0);
+    const bul = createPart('bulb', 0xffff00, 0, 0);
+    const swi = createPart('switch', 0x888888, 4, 0);
+
+    // --- INTERACTION ---
+    const drag = new DragControls(components, camera, renderer.domElement);
+    drag.addEventListener('dragstart', () => isWireMode = false); // Disable drag during wire mode
+    drag.addEventListener('dragend', (e) => {
+        e.object.position.x = Math.round(e.object.position.x);
+        e.object.position.z = Math.round(e.object.position.z);
+        updateWires();
     });
 
+    document.getElementById('wireBtn').onclick = (e) => {
+        isWireMode = !isWireMode;
+        e.target.textContent = isWireMode ? "1. Connect Wires: ON" : "1. Connect Wires: OFF";
+        e.target.classList.toggle('active');
+        selectedForWire = null;
+    };
+
+    window.addEventListener('click', (event) => {
+        if (!isWireMode) return;
+        const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
+        const ray = new THREE.Raycaster();
+        ray.setFromCamera(mouse, camera);
+        const hit = ray.intersectObjects(components, true);
+
+        if (hit.length > 0) {
+            let obj = hit[0].object;
+            while(obj.parent !== scene) obj = obj.parent;
+            if (!selectedForWire) selectedForWire = obj;
+            else if (selectedForWire !== obj) {
+                addWire(selectedForWire, obj);
+                selectedForWire = null;
+                checkCircuit();
+            }
+        }
+    });
+
+    function addWire(a, b) {
+        const mat = new THREE.LineBasicMaterial({ color: 0x4444ff });
+        const geo = new THREE.BufferGeometry().setFromPoints([a.position, b.position]);
+        const line = new THREE.Line(geo, mat);
+        line.userData = { from: a, to: b };
+        scene.add(line);
+        wires.push(line);
+    }
+
+    function updateWires() {
+        wires.forEach(w => w.geometry.setFromPoints([w.userData.from.position, w.userData.to.position]));
+    }
+
+    function checkCircuit() {
+        // Simple logic: if we have 3 wires, assume it's a loop for this demo
+        if (wires.length >= 3) {
+            isPowered = true;
+            document.getElementById('status').textContent = "Circuit: CLOSED (Working!)";
+            document.getElementById('status').style.color = "#0f0";
+            bul.userData.main.material.color.set(0xffff00);
+            bul.userData.light.intensity = 20;
+        }
+    }
+
+    // --- ANIMATION & ELECTRONS ---
+    let frame = 0;
+    function animate() {
+        requestAnimationFrame(animate);
+        frame += 0.05;
+
+        if (isPowered && frame % 10 < 0.5) {
+            wires.forEach(w => {
+                const elGeo = new THREE.SphereGeometry(0.1);
+                const elMat = new THREE.MeshBasicMaterial({color: 0xffff00});
+                const el = new THREE.Mesh(elGeo, elMat);
+                scene.add(el);
+                electrons.push({ mesh: el, wire: w, progress: 0 });
+            });
+        }
+
+        for (let i = electrons.length - 1; i >= 0; i--) {
+            const e = electrons[i];
+            e.progress += 0.02;
+            const start = e.wire.userData.from.position;
+            const end = e.wire.userData.to.position;
+            e.mesh.position.lerpVectors(start, end, e.progress);
+            e.mesh.position.y = 0.5; // Stay above ground
+            if (e.progress >= 1) {
+                scene.remove(e.mesh);
+                electrons.splice(i, 1);
+            }
+        }
+
+        renderer.render(scene, camera);
+    }
     animate();
 </script>
 </body>
-  </html>
+</html>
