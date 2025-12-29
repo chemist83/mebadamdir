@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Circuit Builder</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <h2>3D Circuit Builder</h2>
+    <p>Drag the components to move them.<br>They will snap to the grid!</p>
+    <ul style="list-style: none; padding: 0;">
+        <li><span style="color: red;">■</span> Battery</li>
+        <li><span style="color: blue;">■</span> Resistor</li>
+        <li><span style="color: green;">■</span> LED</li>
+    </ul>
+</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { DragControls } from 'three/addons/controls/DragControls.js';
+
+    // 1. SETUP SCENE
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(5, 5, 10);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // 2. LIGHTS
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(5, 10, 7);
+    scene.add(directionalLight);
+
+    // 3. GRID & FLOOR
+    const grid = new THREE.GridHelper(20, 20);
+    scene.add(grid);
+
+    // 4. COMPONENTS (The blocks)
+    const objects = [];
+    const componentData = [
+        { name: "Battery", color: 0xff0000, pos: [-2, 0.5, 0] },
+        { name: "Resistor", color: 0x0000ff, pos: [0, 0.5, 0] },
+        { name: "LED", color: 0x00ff00, pos: [2, 0.5, 0] }
+    ];
+
+    componentData.forEach(data => {
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshStandardMaterial({ color: data.color });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(...data.pos);
+        mesh.userData.name = data.name;
+        scene.add(mesh);
+        objects.push(mesh);
+    });
+
+    // 5. DRAG AND DROP LOGIC
+    const controls = new DragControls(objects, camera, renderer.domElement);
+
+    // When we start dragging, disable camera movement (if we had any)
+    controls.addEventListener('dragstart', function (event) {
+        event.object.material.emissive.set(0x333333);
+    });
+
+    // When we stop dragging, snap to the grid
+    controls.addEventListener('dragend', function (event) {
+        event.object.material.emissive.set(0x000000);
+        
+        // Grid Snapping Logic
+        event.object.position.x = Math.round(event.object.position.x);
+        event.object.position.z = Math.round(event.object.position.z);
+        event.object.position.y = 0.5; // Keep it on the floor
+    });
+
+    // 6. ANIMATION LOOP
+    function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+    }
+
+    // Handle Window Resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
+</body>
+  </html>
