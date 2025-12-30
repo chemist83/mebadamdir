@@ -34,7 +34,7 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(10, 10, 25);
+    camera.position.set(5, 5, 25);
     camera.lookAt(0,0,0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -90,7 +90,7 @@
             const isPair = (i % 2 === 1);
             let speedBase = 0.02;
             let dir = isPair ? -1 : 1; 
-            let conf = { mesh: el, angle: isPair ? Math.PI : 0, speed: (speedBase + Math.random()*0.01) * dir };
+            let conf = { mesh: el, angle: isPair ? Math.PI : 0, speed: (speedBase + Math.random()*0.1) * dir };
 
             if(i < 2) { conf.type='s'; conf.radius=2.0; if(i===0) addShell(2.0, 0x00ffff); }
             else if(i < 4) { conf.type='s'; conf.radius=4.5; if(i===2) addShell(4.5, 0xff00ff); }
