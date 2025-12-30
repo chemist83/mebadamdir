@@ -2,205 +2,132 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Unified 3D Circuit</title>
+    <title>3D Quantum Orbital Models</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #111; font-family: sans-serif; }
-        #ui { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.8); color: white; padding: 15px; border-radius: 10px; border: 1px solid #444; pointer-events: none; }
-        .controls { pointer-events: auto; margin-top: 10px; }
-        button { background: #333; color: white; border: 1px solid #666; padding: 8px; cursor: pointer; width: 100%; border-radius: 4px; }
-        button.active { background: #ce9400; color: black; font-weight: bold; }
-        #status { margin-top: 10px; color: #00ff00; font-family: monospace; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #00ff00; background: rgba(0,20,0,0.9); padding: 20px; border: 1px solid #00ff00; border-radius: 5px; width: 280px; }
+        input { width: 100%; cursor: pointer; accent-color: #00ff00; }
+        .legend { font-size: 0.8em; margin-top: 10px; line-height: 1.5; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div style="font-weight: bold;">UNITIFIED CIRCUIT LAB</div>
-    <div class="controls">
-        <button id="wireBtn">WIRE MODE: OFF</button>
+    <div style="font-weight: bold; font-size: 1.2em;">ATOM CONFIGURATOR</div>
+    <div id="elName" style="font-size: 1.5em; color: white; margin: 10px 0;">Hydrogen (1)</div>
+    <input type="range" id="selector" min="1" max="10" value="1">
+    
+    <div class="legend">
+        <span style="color:cyan">●</span> 1s Orbital (Inner Core)<br>
+        <span style="color:magenta">●</span> 2s Orbital (Valence Sphere)<br>
+        <span style="color:yellow">●</span> 2p Orbitals (Dumbbells)
     </div>
-    <div id="status">System: Ready</div>
+    <div id="stats" style="margin-top:10px; color: #888;">Electrons: 1</div>
 </div>
 
 <script type="importmap">
-    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
 </script>
 
 <script type="module">
     import * as THREE from 'three';
-    import { DragControls } from 'three/addons/controls/DragControls.js';
 
-    // --- SCENE SETUP ---
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 10, 12);
-    camera.lookAt(0, 0, 0);
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(4, 4, 8);
+    camera.lookAt(0,0,0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-    sun.position.set(5, 10, 5);
-    scene.add(sun);
-    scene.add(new THREE.GridHelper(20, 20, 0x333333, 0x222222));
+    const names = ["Hydrogen", "Helium", "Lithium", "Beryllium", "Boron", "Carbon", "Nitrogen", "Oxygen", "Fluorine", "Neon"];
+    let atomGroup = new THREE.Group();
+    scene.add(atomGroup);
 
-    const components = [];
-    const wires = [];
-    const electrons = [];
-    let wireMode = false;
-    let firstPart = null;
-    let switchOn = false;
+    // Function to build the probability cloud geometry
+    function createCloud(type, count, color, radius, axis = 'y') {
+        const points = [];
+        const density = 3000 * count;
 
-    // --- COMPONENT FACTORY ---
-    // We put parts in a Group and set 'userData.isDraggable' on the group
-    function makeBattery(x, z) {
-        const group = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.8), new THREE.MeshStandardMaterial({color: 0x222222}));
-        body.rotation.z = Math.PI/2;
-        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.51, 0.51, 0.4), new THREE.MeshStandardMaterial({color: 0xb87333}));
-        cap.position.x = 0.7; cap.rotation.z = Math.PI/2;
-        const nub = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({color: 0x999999}));
-        nub.position.x = 1.0; nub.rotation.z = Math.PI/2;
-        
-        group.add(body, cap, nub);
-        group.position.set(x, 0.5, z);
-        group.userData = { type: 'battery' };
-        return group;
-    }
+        for (let i = 0; i < density; i++) {
+            let r = Math.abs(standardNormal());
+            let theta = Math.random() * Math.PI * 2;
+            let phi = Math.acos(2 * Math.random() - 1);
 
-    function makeBulb(x, z) {
-        const group = new THREE.Group();
-        // Holder Base
-        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 0.3, 16), new THREE.MeshStandardMaterial({color: 0x555555}));
-        // Glass Bulb
-        const glass = new THREE.Mesh(new THREE.SphereGeometry(0.6), new THREE.MeshStandardMaterial({color: 0xffffff, transparent: true, opacity: 0.4}));
-        glass.position.y = 0.7;
-        const light = new THREE.PointLight(0xffff00, 0, 10);
-        light.position.y = 0.7;
-        
-        group.add(base, glass, light);
-        group.position.set(x, 0.15, z);
-        group.userData = { type: 'bulb', light: light, glass: glass };
-        return group;
-    }
-
-    function makeSwitch(x, z) {
-        const group = new THREE.Group();
-        const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 1.5), new THREE.MeshStandardMaterial({color: 0x333333}));
-        const leverArm = new THREE.Group();
-        const stick = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.0, 0.1), new THREE.MeshStandardMaterial({color: 0xaaaaaa}));
-        stick.position.y = 0.5;
-        leverArm.add(stick);
-        
-        group.add(base, leverArm);
-        group.position.set(x, 0.1, z);
-        group.userData = { type: 'switch', lever: leverArm };
-        return group;
-    }
-
-    // Add to scene
-    const battery = makeBattery(-4, 0);
-    const bulb = makeBulb(0, 0);
-    const sw = makeSwitch(4, 0);
-    [battery, bulb, sw].forEach(g => { scene.add(g); components.push(g); });
-
-    // --- DRAG LOGIC (Unified) ---
-    const drag = new DragControls(components, camera, renderer.domElement);
-    
-    drag.addEventListener('drag', () => {
-        updateWires(); // Move wires while dragging
-    });
-
-    drag.addEventListener('dragend', (e) => {
-        // Snap the whole group to grid
-        e.object.position.x = Math.round(e.object.position.x);
-        e.object.position.z = Math.round(e.object.position.z);
-        updateWires();
-    });
-
-    // --- WIRE & INTERACTION ---
-    document.getElementById('wireBtn').onclick = (e) => {
-        wireMode = !wireMode;
-        e.target.textContent = wireMode ? "WIRE MODE: ON" : "WIRE MODE: OFF";
-        e.target.classList.toggle('active');
-        drag.enabled = !wireMode; // Stop dragging when in wire mode
-    };
-
-    window.addEventListener('click', (event) => {
-        const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
-        const ray = new THREE.Raycaster();
-        ray.setFromCamera(mouse, camera);
-        const hits = ray.intersectObjects(components, true);
-
-        if (hits.length > 0) {
-            // Find the top-most Group
-            let obj = hits[0].object;
-            while(obj.parent !== scene) obj = obj.parent;
-
-            if (wireMode) {
-                if (!firstPart) {
-                    firstPart = obj;
-                    document.getElementById('status').textContent = "Selected: " + obj.userData.type;
-                } else if (firstPart !== obj) {
-                    createWire(firstPart, obj);
-                    firstPart = null;
-                    document.getElementById('status').textContent = "Wire Connected";
-                }
-            } else if (obj.userData.type === 'switch') {
-                switchOn = !switchOn;
-                obj.userData.lever.rotation.z = switchOn ? -0.7 : 0;
+            let x, y, z;
+            if (type === 's') {
+                r *= radius;
+                x = r * Math.sin(phi) * Math.cos(theta);
+                y = r * Math.sin(phi) * Math.sin(theta);
+                z = r * Math.cos(phi);
+            } else {
+                // p-orbital dumbbell logic
+                r *= 3.5;
+                const pPhi = Math.acos(Math.pow(Math.random() * 2 - 1, 3));
+                x = r * Math.sin(pPhi) * Math.cos(theta);
+                y = r * Math.cos(pPhi);
+                z = r * Math.sin(pPhi) * Math.sin(theta);
+                
+                // Align to axis
+                if(axis === 'x') { [x, y] = [y, x]; }
+                else if(axis === 'z') { [z, y] = [y, z]; }
             }
+            points.push(new THREE.Vector3(x, y, z));
         }
-    });
 
-    function createWire(a, b) {
-        const mat = new THREE.MeshStandardMaterial({ color: 0xcc9900 });
-        const geo = new THREE.TubeGeometry(new THREE.LineCurve3(a.position, b.position), 20, 0.08, 8, false);
-        const wire = new THREE.Mesh(geo, mat);
-        wire.userData = { from: a, to: b };
-        scene.add(wire);
-        wires.push(wire);
+        const geo = new THREE.BufferGeometry().setFromPoints(points);
+        const mat = new THREE.PointsMaterial({ color: color, size: 0.02, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending });
+        return new THREE.Points(geo, mat);
     }
 
-    function updateWires() {
-        wires.forEach(w => {
-            w.geometry.dispose();
-            w.geometry = new THREE.TubeGeometry(new THREE.LineCurve3(w.userData.from.position, w.userData.to.position), 20, 0.08, 8, false);
-        });
+    function buildAtom(z) {
+        while(atomGroup.children.length > 0) atomGroup.remove(atomGroup.children[0]);
+        
+        // 1. Add Nucleus
+        const nuc = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), new THREE.MeshBasicMaterial({color: 0xffffff}));
+        atomGroup.add(nuc);
+
+        // 2. Build 1s (All 10 have this)
+        atomGroup.add(createCloud('s', (z == 1 ? 1 : 2), 0x00ffff, 0.8));
+
+        // 3. Build 2s (Elements 3-10)
+        if (z >= 3) {
+            atomGroup.add(createCloud('s', (z == 3 ? 1 : 2), 0xff00ff, 1.8));
+        }
+
+        // 4. Build 2p (Elements 5-10)
+        if (z >= 5) {
+            const pElectrons = z - 4;
+            if (pElectrons >= 1) atomGroup.add(createCloud('p', 1, 0xffff00, 1, 'x'));
+            if (pElectrons >= 3) atomGroup.add(createCloud('p', 1, 0xffff00, 1, 'y'));
+            if (pElectrons >= 5) atomGroup.add(createCloud('p', 1, 0xffff00, 1, 'z'));
+        }
+
+        document.getElementById('elName').innerText = `${names[z-1]} (${z})`;
+        document.getElementById('stats').innerText = `Electrons: ${z} | Protons: ${z}`;
     }
 
-    // --- ANIMATION LOOP ---
+    function standardNormal() {
+        return Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
+    }
+
+    document.getElementById('selector').oninput = (e) => buildAtom(parseInt(e.target.value));
+    buildAtom(1);
+
     function animate() {
         requestAnimationFrame(animate);
-        
-        const circuitReady = (wires.length >= 3 && switchOn);
-        
-        // Glow effect
-        bulb.userData.light.intensity = circuitReady ? 40 : 0;
-        bulb.userData.glass.material.emissive.setHex(circuitReady ? 0xffaa00 : 0x000000);
-
-        // Electrons
-        if (circuitReady && Math.random() > 0.8) {
-            wires.forEach(w => {
-                const el = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshBasicMaterial({color: 0xffffff}));
-                scene.add(el);
-                electrons.push({ mesh: el, wire: w, p: 0 });
-            });
-        }
-
-        for (let i = electrons.length - 1; i >= 0; i--) {
-            const e = electrons[i];
-            e.p += 0.04;
-            e.mesh.position.lerpVectors(e.wire.userData.from.position, e.wire.userData.to.position, e.p);
-            e.mesh.position.y += 0.3;
-            if (e.p >= 1) { scene.remove(e.mesh); electrons.splice(i, 1); }
-        }
-
+        atomGroup.rotation.y += 0.005;
+        atomGroup.rotation.x += 0.002;
         renderer.render(scene, camera);
     }
     animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 </script>
 </body>
 </html>
