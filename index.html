@@ -2,22 +2,38 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Neon Quantum Shells</title>
+    <title>3D Quantum Atom Lab</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #050505; font-family: sans-serif; }
-        #info { position: absolute; top: 20px; left: 20px; color: white; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; border: 1px solid #444; }
-        .label { display: flex; align-items: center; margin-bottom: 5px; font-size: 0.9em; }
-        .dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 10px; }
+        body { margin: 0; overflow: hidden; background: radial-gradient(circle, #1a1a1a 0%, #000 100%); font-family: 'Segoe UI', sans-serif; }
+        
+        /* Centered UI at the bottom */
+        #ui { 
+            position: absolute; 
+            bottom: 30px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            background: rgba(0, 0, 0, 0.85); 
+            color: white; 
+            padding: 20px 40px; 
+            border-radius: 50px; 
+            border: 1px solid #00ffcc; 
+            text-align: center;
+            width: 400px;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+        }
+
+        input { width: 100%; cursor: pointer; accent-color: #00ffcc; margin: 15px 0; }
+        
+        #el-display { font-size: 24px; font-weight: bold; color: #00ffcc; text-transform: uppercase; letter-spacing: 2px; }
+        #config-display { font-family: monospace; color: #aaa; }
     </style>
 </head>
 <body>
 
-<div id="info">
-    <h3 style="margin:0 0 10px 0;">Neon ($1s^2 2s^2 2p^6$)</h3>
-    <div class="label"><div class="dot" style="background:cyan"></div> 1s Orbital (Inner)</div>
-    <div class="label"><div class="dot" style="background:magenta"></div> 2s Orbital (Outer Sphere)</div>
-    <div class="label"><div class="dot" style="background:yellow"></div> 2p<sub>x,y,z</sub> Orbitals (Dumbbells)</div>
-    <p style="font-size:0.8em; color:#aaa;">Rotating to show symmetry</p>
+<div id="ui">
+    <div id="el-display">Hydrogen</div>
+    <input type="range" id="atomSlider" min="1" max="10" value="1">
+    <div id="config-display">Configuration: 1s¹</div>
 </div>
 
 <script type="importmap">
@@ -27,88 +43,117 @@
 <script type="module">
     import * as THREE from 'three';
 
+    // --- SCENE SETUP ---
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(3, 3, 5);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 2, 8);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
     document.body.appendChild(renderer.domElement);
 
-    const light = new THREE.PointLight(0xffffff, 100);
-    light.position.set(5, 5, 5);
-    scene.add(light, new THREE.AmbientLight(0xffffff, 0.3));
+    // Lights for 3D depth
+    const amb = new THREE.AmbientLight(0xffffff, 0.5);
+    const point = new THREE.PointLight(0xffffff, 100);
+    point.position.set(5, 5, 5);
+    scene.add(amb, point);
 
+    // The Unified Atom Group
     const atomGroup = new THREE.Group();
     scene.add(atomGroup);
 
-    // --- ORBITAL CREATION FUNCTIONS ---
+    const elements = [
+        { z: 1, n: "Hydrogen", c: "1s¹" }, { z: 2, n: "Helium", c: "1s²" },
+        { z: 3, n: "Lithium", c: "2s¹" }, { z: 4, n: "Beryllium", c: "2s²" },
+        { z: 5, n: "Boron", c: "2p¹" }, { z: 6, n: "Carbon", c: "2p²" },
+        { z: 7, n: "Nitrogen", c: "2p³" }, { z: 8, n: "Oxygen", c: "2p⁴" },
+        { z: 9, n: "Fluorine", c: "2p⁵" }, { z: 10, n: "Neon", c: "2p⁶" }
+    ];
 
-    function makeSphere(radius, color, opacity) {
-        const geo = new THREE.SphereGeometry(radius, 64, 64);
+    // --- GEOMETRY CREATORS ---
+
+    function createOrbital(type, radius, color, opacity, axis = 'y') {
+        let geo;
+        if (type === 's') {
+            geo = new THREE.SphereGeometry(radius, 64, 64);
+        } else {
+            // Create a "Double Pear" for P orbitals
+            geo = new THREE.SphereGeometry(radius * 0.6, 32, 32);
+            geo.scale(1, 2.2, 1); 
+            
+            const lobe1 = new THREE.Mesh(geo);
+            lobe1.position.y = radius * 0.9;
+            const lobe2 = new THREE.Mesh(geo);
+            lobe2.position.y = -radius * 0.9;
+            
+            const pGroup = new THREE.Group();
+            pGroup.add(lobe1, lobe2);
+            
+            if(axis === 'x') pGroup.rotation.z = Math.PI/2;
+            if(axis === 'z') pGroup.rotation.x = Math.PI/2;
+            
+            // Set material for sub-meshes
+            const pMat = new THREE.MeshStandardMaterial({ 
+                color: color, transparent: true, opacity: opacity, side: THREE.DoubleSide,
+                emissive: color, emissiveIntensity: 0.3
+            });
+            lobe1.material = pMat; lobe2.material = pMat;
+            return pGroup;
+        }
+
         const mat = new THREE.MeshStandardMaterial({ 
-            color: color, 
-            transparent: true, 
-            opacity: opacity,
-            side: THREE.DoubleSide
+            color: color, transparent: true, opacity: opacity, side: THREE.DoubleSide 
         });
         return new THREE.Mesh(geo, mat);
     }
 
-    function makeDumbbell(axis, color) {
-        const group = new THREE.Group();
-        const lobeGeo = new THREE.SphereGeometry(0.8, 32, 32);
-        const mat = new THREE.MeshStandardMaterial({ 
-            color: color, 
-            transparent: true, 
-            opacity: 0.4,
-            emissive: color,
-            emissiveIntensity: 0.5
-        });
+    function buildAtom(z) {
+        // Clear previous atom
+        while(atomGroup.children.length > 0) atomGroup.remove(atomGroup.children[0]);
 
-        const lobe1 = new THREE.Mesh(lobeGeo, mat);
-        const lobe2 = new THREE.Mesh(lobeGeo, mat);
+        // 1. Nucleus (The very center)
+        const nuc = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
+        atomGroup.add(nuc);
 
-        // Stretch and position lobes to look like p-orbital "pears"
-        lobe1.scale.set(0.8, 1.5, 0.8);
-        lobe2.scale.set(0.8, 1.5, 0.8);
-        
-        lobe1.position.y = 0.9;
-        lobe2.position.y = -0.9;
+        // 2. 1s Orbital (Cyan) - Exists for all
+        atomGroup.add(createOrbital('s', 0.8, 0x00ffff, 0.6));
 
-        group.add(lobe1, lobe2);
+        // 3. 2s Orbital (Magenta) - Starts at Lithium (3)
+        if (z >= 3) {
+            atomGroup.add(createOrbital('s', 2.0, 0xff00ff, 0.2));
+        }
 
-        if (axis === 'x') group.rotation.z = Math.PI / 2;
-        if (axis === 'z') group.rotation.x = Math.PI / 2;
+        // 4. 2p Orbitals (Yellow) - Starts at Boron (5)
+        if (z >= 5) {
+            if (z >= 5) atomGroup.add(createOrbital('p', 1.6, 0xffff00, 0.3, 'x'));
+            if (z >= 7) atomGroup.add(createOrbital('p', 1.6, 0xffff00, 0.3, 'y'));
+            if (z >= 9) atomGroup.add(createOrbital('p', 1.6, 0xffff00, 0.3, 'z'));
+        }
 
-        return group;
+        // Update UI Text
+        document.getElementById('el-display').innerText = elements[z-1].n;
+        document.getElementById('config-display').innerText = "Configuration: " + elements[z-1].c;
     }
 
-    // --- ADD NEON'S "GATHERED" ORBITALS ---
+    // Initialization
+    buildAtom(1);
 
-    // 1. Nucleus
-    const nucleus = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshBasicMaterial({color: 'white'}));
-    atomGroup.add(nucleus);
+    // Slider Event
+    document.getElementById('atomSlider').oninput = (e) => {
+        buildAtom(parseInt(e.target.value));
+    };
 
-    // 2. 1s Orbital (Inner core)
-    atomGroup.add(makeSphere(0.6, 0x00ffff, 0.8));
-
-    // 3. 2s Orbital (Larger sphere)
-    atomGroup.add(makeSphere(1.8, 0xff00ff, 0.2));
-
-    // 4. 2p Orbitals (x, y, z)
-    atomGroup.add(makeDumbbell('x', 0xffff00));
-    atomGroup.add(makeDumbbell('y', 0xffff00));
-    atomGroup.add(makeDumbbell('z', 0xffff00));
-
+    // Animation Loop
     function animate() {
         requestAnimationFrame(animate);
-        atomGroup.rotation.y += 0.01;
-        atomGroup.rotation.x += 0.005;
+        atomGroup.rotation.y += 0.005;
+        atomGroup.rotation.x += 0.002;
         renderer.render(scene, camera);
     }
     animate();
 
+    // Responsive Window
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
