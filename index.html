@@ -2,25 +2,28 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Scientifically Accurate Atoms</title>
+    <title>Determined Atomic Orbitals</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: radial-gradient(circle, #111, #000); font-family: sans-serif; }
         #ui { 
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); 
             background: rgba(0,0,0,0.9); color: #00ffcc; padding: 20px; 
             border-radius: 40px; border: 1px solid #00ffcc; text-align: center;
-            width: 350px;
+            width: 400px; box-shadow: 0 0 20px #00ffcc55;
         }
         input { width: 100%; cursor: pointer; accent-color: #00ffcc; }
-        #count { font-weight: bold; color: white; }
+        .label-grid { display: grid; grid-template-columns: 1fr 1fr; font-size: 12px; margin-top: 10px; color: #888; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div id="name" style="font-weight:bold; font-size:1.4em;">HYDROGEN</div>
+    <div id="name" style="font-weight:bold; font-size:1.5em; letter-spacing:2px;">HYDROGEN</div>
     <input type="range" id="selector" min="1" max="10" value="1">
-    <div id="count">Electrons: 1</div>
+    <div class="label-grid">
+        <div id="electron-count">Electrons: 1</div>
+        <div id="orbital-desc">Shell: 1s</div>
+    </div>
 </div>
 
 <script type="importmap">
@@ -31,8 +34,9 @@
     import * as THREE from 'three';
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 12; 
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(5, 5, 12);
+    camera.lookAt(0,0,0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -42,55 +46,72 @@
     scene.add(atomGroup);
 
     let electrons = [];
-    const names = ["Hydrogen", "Helium", "Lithium", "Beryllium", "Boron", "Carbon", "Nitrogen", "Oxygen", "Fluorine", "Neon"];
+    const elements = ["Hydrogen", "Helium", "Lithium", "Beryllium", "Boron", "Carbon", "Nitrogen", "Oxygen", "Fluorine", "Neon"];
+
+    // Helper to create a determined P-orbital dumbbell
+    function createPContainer(axisColor, rotation) {
+        const group = new THREE.Group();
+        const lobeGeo = new THREE.SphereGeometry(0.8, 16, 16);
+        lobeGeo.scale(1, 2.2, 1);
+        const mat = new THREE.MeshBasicMaterial({ color: axisColor, wireframe: true, transparent: true, opacity: 0.1 });
+        
+        const top = new THREE.Mesh(lobeGeo, mat); top.position.y = 1.2;
+        const bottom = new THREE.Mesh(lobeGeo, mat); bottom.position.y = -1.2;
+        
+        group.add(top, bottom);
+        if(rotation === 'x') group.rotation.z = Math.PI/2;
+        if(rotation === 'z') group.rotation.x = Math.PI/2;
+        return group;
+    }
 
     function buildAtom(z) {
-        // Clear everything
         while(atomGroup.children.length > 0) atomGroup.remove(atomGroup.children[0]);
         electrons.forEach(el => scene.remove(el.mesh));
         electrons = [];
 
         // 1. Nucleus
-        const nuc = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
+        const nuc = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
         atomGroup.add(nuc);
 
-        // 2. Add Electrons based on Atomic Number (Z)
+        // 2. 1s Orbital (Cyan)
+        const s1 = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshBasicMaterial({color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.05}));
+        atomGroup.add(s1);
+
+        // 3. 2s Orbital (Magenta)
+        if(z >= 3) {
+            const s2 = new THREE.Mesh(new THREE.SphereGeometry(3.0, 32, 32), new THREE.MeshBasicMaterial({color: 0xff00ff, wireframe: true, transparent: true, opacity: 0.05}));
+            atomGroup.add(s2);
+        }
+
+        // 4. Determine P Orbitals (Yellow)
+        const axes = ['x', 'y', 'z'];
+        if(z >= 5) {
+            const pCount = z - 4;
+            if(pCount >= 1) atomGroup.add(createPContainer(0xffff00, 'x')); // 2px
+            if(pCount >= 3) atomGroup.add(createPContainer(0xffff00, 'y')); // 2py
+            if(pCount >= 5) atomGroup.add(createPContainer(0xffff00, 'z')); // 2pz
+        }
+
+        // 5. Add specific electrons
         for (let i = 0; i < z; i++) {
-            const elGeo = new THREE.SphereGeometry(0.1, 12, 12);
-            const elMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            const mesh = new THREE.Mesh(elGeo, elMat);
-            scene.add(mesh);
-
-            let config = { mesh: mesh, angle: Math.random() * Math.PI * 2, speed: 0.02 + Math.random() * 0.03 };
-
-            if (i < 2) { // 1s Shell
-                config.type = 's';
-                config.radius = 1.5;
-                config.axis = new THREE.Vector3(Math.random(), Math.random(), 0).normalize();
-            } else if (i < 4) { // 2s Shell
-                config.type = 's';
-                config.radius = 3.5;
-                config.axis = new THREE.Vector3(0, Math.random(), Math.random()).normalize();
-            } else { // 2p Shells
-                config.type = 'p';
-                config.radius = 5.0;
-                const pAxes = [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)];
-                config.pAxis = pAxes[(i-4) % 3];
+            const el = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), new THREE.MeshBasicMaterial({color: 0xffffff}));
+            scene.add(el);
+            
+            let config = { mesh: el, angle: Math.random() * 6.28, speed: 0.03 + Math.random() * 0.02 };
+            
+            if (i < 2) { config.type = '1s'; config.radius = 1.2; }
+            else if (i < 4) { config.type = '2s'; config.radius = 3.0; }
+            else { 
+                config.type = '2p'; 
+                config.radius = 2.4;
+                config.axisIndex = Math.floor((i-4)/2); // Determines which dumbbell (px, py, or pz)
             }
             electrons.push(config);
         }
 
-        // 3. Add faint Orbital Guides
-        const addShell = (r, col) => {
-            const g = new THREE.SphereGeometry(r, 64, 64);
-            const m = new THREE.MeshBasicMaterial({color: col, wireframe: true, transparent: true, opacity: 0.03});
-            atomGroup.add(new THREE.Mesh(g, m));
-        };
-        addShell(1.5, 0x00ffff); // 1s
-        if(z > 2) addShell(3.5, 0xff00ff); // 2s
-
-        document.getElementById('name').innerText = names[z-1].toUpperCase();
-        document.getElementById('count').innerText = `Electrons: ${z}`;
+        document.getElementById('name').innerText = elements[z-1].toUpperCase();
+        document.getElementById('electron-count').innerText = `Electrons: ${z}`;
+        document.getElementById('orbital-desc').innerText = `Shell: ${z <= 2 ? '1s' : (z <= 4 ? '2s' : '2p')}`;
     }
 
     buildAtom(1);
@@ -101,26 +122,24 @@
         
         electrons.forEach(el => {
             el.angle += el.speed;
-            if (el.type === 's') {
-                // Orbiting in a circle tilted by el.axis
-                const x = Math.cos(el.angle) * el.radius;
-                const y = Math.sin(el.angle) * el.radius;
-                el.mesh.position.set(x, y, 0).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1), el.axis));
+            if (el.type.includes('s')) {
+                const r = el.radius;
+                el.mesh.position.set(Math.cos(el.angle)*r, Math.sin(el.angle)*r, 0);
             } else {
-                // P-orbital "figure 8" movement confined to lobes
-                const scale = Math.sin(el.angle) * el.radius;
-                const width = Math.cos(el.angle * 2) * 0.5; // Narrow waist
-                const pos = new THREE.Vector3(width, scale, width);
+                // Determined P-orbital figure-8 path
+                const r = el.radius;
+                const path = Math.sin(el.angle) * r;
+                const drift = Math.cos(el.angle) * 0.3;
                 
-                // Align the figure-8 to the X, Y, or Z axis
-                if(el.pAxis.x === 1) pos.set(scale, width, width);
-                if(el.pAxis.z === 1) pos.set(width, width, scale);
-                
-                el.mesh.position.copy(pos);
+                if(el.axisIndex === 0) el.mesh.position.set(path, drift, drift); // px
+                else if(el.axisIndex === 1) el.mesh.position.set(drift, path, drift); // py
+                else el.mesh.position.set(drift, drift, path); // pz
             }
+            // Make electrons rotate with the atom group
+            el.mesh.position.applyAxisAngle(new THREE.Vector3(0,1,0), 0.005);
         });
 
-        atomGroup.rotation.y += 0.002; // Slow background rotation
+        atomGroup.rotation.y += 0.005;
         renderer.render(scene, camera);
     }
     animate();
