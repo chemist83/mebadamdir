@@ -35,7 +35,7 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(5, 5, 12);
+    camera.position.set(5, 5, 13);
     camera.lookAt(0,0,0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -97,7 +97,7 @@
             const el = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), new THREE.MeshBasicMaterial({color: 0xffffff}));
             scene.add(el);
             
-            let config = { mesh: el, angle: Math.random() * 6.28, speed: 0.08 + Math.random() * 0.02 };
+            let config = { mesh: el, angle: Math.random() * 6.28, speed: 0.5 + Math.random() * 0.02 };
             
             if (i < 2) { config.type = '1s'; config.radius = 1.2; }
             else if (i < 4) { config.type = '2s'; config.radius = 3.0; }
