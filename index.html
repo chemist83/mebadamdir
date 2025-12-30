@@ -2,30 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>20 Element Quantum Lab</title>
+    <title>Pauli-Compliant Atomic Model</title>
     <style>
-        body { margin: 0; overflow: hidden; background: radial-gradient(circle, #111, #000); font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: radial-gradient(circle, #0a0a0a, #000); font-family: sans-serif; }
         #ui { 
             position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); 
-            background: rgba(0,0,0,0.9); color: #00ffcc; padding: 20px; 
+            background: rgba(0,0,0,0.95); color: #00ffcc; padding: 20px 40px; 
             border-radius: 40px; border: 1px solid #00ffcc; text-align: center;
-            width: 450px; box-shadow: 0 0 20px #00ffcc55;
+            width: 450px; box-shadow: 0 0 30px rgba(0, 255, 204, 0.3);
         }
         input { width: 100%; cursor: pointer; accent-color: #00ffcc; }
-        .stats { display: flex; justify-content: space-around; font-size: 12px; margin-top: 10px; color: #888; }
-        #config { font-family: monospace; color: #fff; margin-top: 5px; }
+        #config { font-family: 'Courier New', monospace; color: #fff; margin: 5px 0; font-size: 1.1em; }
+        .spin-note { font-size: 10px; color: #ffaa00; text-transform: uppercase; letter-spacing: 1px; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div id="name" style="font-weight:bold; font-size:1.5em; letter-spacing:2px;">HYDROGEN</div>
+    <div id="name" style="font-weight:bold; font-size:1.6em; letter-spacing:2px;">HYDROGEN</div>
     <div id="config">1s¹</div>
     <input type="range" id="selector" min="1" max="20" value="1">
-    <div class="stats">
-        <div id="e-count">Electrons: 1</div>
-        <div id="p-count">Protons: 1</div>
-    </div>
+    <div class="spin-note">Pauli Exclusion Principle: Opposite Spins Active</div>
 </div>
 
 <script type="importmap">
@@ -37,7 +34,7 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(8, 8, 25);
+    camera.position.set(10, 10, 25);
     camera.lookAt(0,0,0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -58,14 +55,16 @@
         "[Ne] 3s¹","[Ne] 3s²","[Ne] 3s² 3p¹","[Ne] 3s² 3p²","[Ne] 3s² 3p³","[Ne] 3s² 3p⁴","[Ne] 3s² 3p⁵","[Ne] 3s² 3p⁶","[Ar] 4s¹","[Ar] 4s²"
     ];
 
-    function createPContainer(radius, color) {
+    function createPOrbital(radius, color, rotAxis) {
         const group = new THREE.Group();
-        const lobeGeo = new THREE.SphereGeometry(radius*0.3, 16, 16);
-        lobeGeo.scale(1, 2.2, 1);
-        const mat = new THREE.MeshBasicMaterial({ color: color, wireframe: true, transparent: true, opacity: 0.05 });
-        const t = new THREE.Mesh(lobeGeo, mat); t.position.y = radius * 0.5;
-        const b = new THREE.Mesh(lobeGeo, mat); b.position.y = -radius * 0.5;
-        group.add(t, b);
+        const lobeGeo = new THREE.SphereGeometry(radius*0.35, 24, 24);
+        lobeGeo.scale(1, 2.4, 1);
+        const mat = new THREE.MeshBasicMaterial({ color: color, wireframe: true, transparent: true, opacity: 0.08 });
+        const top = new THREE.Mesh(lobeGeo, mat); top.position.y = radius * 0.6;
+        const bottom = new THREE.Mesh(lobeGeo, mat); bottom.position.y = -radius * 0.6;
+        group.add(top, bottom);
+        if(rotAxis === 'x') group.rotation.z = Math.PI/2;
+        if(rotAxis === 'z') group.rotation.x = Math.PI/2;
         return group;
     }
 
@@ -75,47 +74,49 @@
         electrons = [];
 
         // Nucleus
-        const nuc = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshBasicMaterial({color: 0xffffff}));
+        const nuc = new THREE.Mesh(new THREE.SphereGeometry(0.4, 20, 20), new THREE.MeshBasicMaterial({color: 0xffffff}));
         atomGroup.add(nuc);
 
         const addShell = (r, col) => {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(r, 64, 64), new THREE.MeshBasicMaterial({color: col, wireframe: true, transparent: true, opacity: 0.03}));
+            const m = new THREE.Mesh(new THREE.SphereGeometry(r, 64, 64), new THREE.MeshBasicMaterial({color: col, wireframe: true, transparent: true, opacity: 0.04}));
             atomGroup.add(m);
         };
 
-        // Shell logic
         for(let i=0; i<z; i++) {
-            const el = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), new THREE.MeshBasicMaterial({color: 0xffffff}));
+            const el = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), new THREE.MeshBasicMaterial({color: 0xffffff}));
             scene.add(el);
-            let conf = { mesh: el, angle: Math.random()*6.28, speed: 0.12 + Math.random()*0.01 };
+            
+            // OPPOSITE SPIN LOGIC: Every 2nd electron in a subshell gets a negative speed multiplier
+            const isPair = (i % 2 === 1);
+            let speedBase = 0.02;
+            let dir = isPair ? -1 : 1; 
+            let conf = { mesh: el, angle: isPair ? Math.PI : 0, speed: (speedBase + Math.random()*0.01) * dir };
 
-            if(i < 2) { conf.type='s'; conf.radius=1.5; if(i===0) addShell(1.5, 0x00ffff); }
-            else if(i < 4) { conf.type='s'; conf.radius=3.5; if(i===2) addShell(3.5, 0xff00ff); }
+            if(i < 2) { conf.type='s'; conf.radius=2.0; if(i===0) addShell(2.0, 0x00ffff); }
+            else if(i < 4) { conf.type='s'; conf.radius=4.5; if(i===2) addShell(4.5, 0xff00ff); }
             else if(i < 10) { 
-                conf.type='p'; conf.radius=3.0; conf.axIdx=(i-4)%3; 
+                conf.type='p'; conf.radius=4.0; conf.axIdx=(i-4)%3; 
                 if(i===4) {
-                    const px=createPContainer(3.0, 0xffff00); px.rotation.z=Math.PI/2; atomGroup.add(px);
-                    const py=createPContainer(3.0, 0xffff00); atomGroup.add(py);
-                    const pz=createPContainer(3.0, 0xffff00); pz.rotation.x=Math.PI/2; atomGroup.add(pz);
+                    atomGroup.add(createPOrbital(4.0, 0xffff00, 'x'));
+                    atomGroup.add(createPOrbital(4.0, 0xffff00, 'y'));
+                    atomGroup.add(createPOrbital(4.0, 0xffff00, 'z'));
                 }
             }
-            else if(i < 12) { conf.type='s'; conf.radius=5.5; if(i===10) addShell(5.5, 0x00ff00); }
+            else if(i < 12) { conf.type='s'; conf.radius=7.0; if(i===10) addShell(7.0, 0x00ff00); }
             else if(i < 18) { 
-                conf.type='p'; conf.radius=5.0; conf.axIdx=(i-12)%3;
+                conf.type='p'; conf.radius=6.5; conf.axIdx=(i-12)%3;
                 if(i===12) {
-                    const px=createPContainer(5.0, 0x00ff00); px.rotation.z=Math.PI/2; atomGroup.add(px);
-                    const py=createPContainer(5.0, 0x00ff00); atomGroup.add(py);
-                    const pz=createPContainer(5.0, 0x00ff00); pz.rotation.x=Math.PI/2; atomGroup.add(pz);
+                    atomGroup.add(createPOrbital(6.5, 0x00ff00, 'x'));
+                    atomGroup.add(createPOrbital(6.5, 0x00ff00, 'y'));
+                    atomGroup.add(createPOrbital(6.5, 0x00ff00, 'z'));
                 }
             }
-            else { conf.type='s'; conf.radius=7.5; if(i===18) addShell(7.5, 0xffffff); }
+            else { conf.type='s'; conf.radius=9.5; if(i===18) addShell(9.5, 0xffffff); }
             electrons.push(conf);
         }
 
         document.getElementById('name').innerText = elements[z-1].toUpperCase();
         document.getElementById('config').innerText = configs[z-1];
-        document.getElementById('e-count').innerText = `Electrons: ${z}`;
-        document.getElementById('p-count').innerText = `Protons: ${z}`;
     }
 
     buildAtom(1);
@@ -123,20 +124,26 @@
 
     function animate() {
         requestAnimationFrame(animate);
-        const rot = 0.005;
+        const globalRot = 0.005;
+        
         electrons.forEach(el => {
             el.angle += el.speed;
             const r = el.radius;
-            if(el.type==='s') el.mesh.position.set(Math.cos(el.angle)*r, Math.sin(el.angle)*r, 0);
-            else {
-                const path = Math.sin(el.angle)*r, drift = Math.cos(el.angle)*0.4;
+            if(el.type==='s') {
+                // S-orbitals move in the X-Y plane but we offset the pair to avoid collisions
+                el.mesh.position.set(Math.cos(el.angle)*r, Math.sin(el.angle)*r, 0);
+            } else {
+                // P-orbitals figure-8 movement
+                const path = Math.sin(el.angle)*r;
+                const drift = Math.cos(el.angle)*0.5;
                 if(el.axIdx===0) el.mesh.position.set(path, drift, drift);
                 else if(el.axIdx===1) el.mesh.position.set(drift, path, drift);
                 else el.mesh.position.set(drift, drift, path);
             }
-            el.mesh.position.applyAxisAngle(new THREE.Vector3(0,1,0), rot);
+            el.mesh.position.applyAxisAngle(new THREE.Vector3(0,1,0), globalRot);
         });
-        atomGroup.rotation.y += rot;
+
+        atomGroup.rotation.y += globalRot;
         renderer.render(scene, camera);
     }
     animate();
