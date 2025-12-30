@@ -97,7 +97,7 @@
             const el = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), new THREE.MeshBasicMaterial({color: 0xffffff}));
             scene.add(el);
             
-            let config = { mesh: el, angle: Math.random() * 6.28, speed: 0.03 + Math.random() * 0.02 };
+            let config = { mesh: el, angle: Math.random() * 6.28, speed: 0.05 + Math.random() * 0.02 };
             
             if (i < 2) { config.type = '1s'; config.radius = 1.2; }
             else if (i < 4) { config.type = '2s'; config.radius = 3.0; }
