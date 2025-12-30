@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dynamic Nucleus Growth Model</title>
+    <title>Realistic Atomic Growth Model</title>
     <style>
         body { margin: 0; overflow: hidden; background: radial-gradient(circle, #0a0a0a, #000); font-family: sans-serif; }
         #ui { 
@@ -22,7 +22,7 @@
     <div id="name" style="font-weight:bold; font-size:1.6em; letter-spacing:2px;">HYDROGEN</div>
     <div id="config">1s¹</div>
     <input type="range" id="selector" min="1" max="40" value="1">
-    <div class="info">Nucleus Radius Scales with Atomic Mass</div>
+    <div class="info">Precision Scaling: Nucleus expands per Proton addition</div>
 </div>
 
 <script type="importmap">
@@ -34,7 +34,7 @@
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
-    camera.position.set(15, 15, 45);
+    camera.position.set(10, 10, 40);
     camera.lookAt(0,0,0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -65,45 +65,47 @@
         electrons.forEach(el => scene.remove(el.mesh));
         electrons = [];
 
-        // DYNAMIC NUCLEUS GROWTH
-        // Formula: Radius grows based on Z. 
-        // Hydrogen (1) starts at 0.6, Zirconium (40) reaches ~2.2
-        const nucRadius = 0.6 + (Math.sqrt(z) * 0.25);
+        // SHRUNK INITIAL NUCLEUS & PROGRESSIVE GROWTH
+        // Hydrogen (1) starts very small (0.25). 
+        // Growth factor ensures Zirconium (40) is significantly larger (~2.0).
+        const nucRadius = 0.15 + (Math.sqrt(z) * 0.3);
         const nucGeo = new THREE.SphereGeometry(nucRadius, 32, 32);
         const nucMat = new THREE.MeshStandardMaterial({
             color: 0xffffff,
             emissive: 0xffffff,
-            emissiveIntensity: 0.4
+            emissiveIntensity: 0.6
         });
         const nuc = new THREE.Mesh(nucGeo, nucMat);
         atomGroup.add(nuc);
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
+        const light = new THREE.PointLight(0xffffff, 2, 50);
+        light.position.set(5, 5, 5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
         const addS = (r, col) => {
-            atomGroup.add(new THREE.Mesh(new THREE.SphereGeometry(r, 64, 64), new THREE.MeshBasicMaterial({color: col, wireframe: true, transparent: true, opacity: 0.04})));
+            atomGroup.add(new THREE.Mesh(new THREE.SphereGeometry(r, 64, 64), new THREE.MeshBasicMaterial({color: col, wireframe: true, transparent: true, opacity: 0.05})));
         };
 
-        // Shift Shells based on Nucleus size to maintain gap
-        const shift = nucRadius * 1.5;
+        // Maintain relative distance from the nucleus boundary
+        const baseOffset = nucRadius + 0.8;
 
         for(let i=0; i<z; i++) {
-            const el = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), new THREE.MeshBasicMaterial({color: 0xffffff}));
+            const el = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), new THREE.MeshBasicMaterial({color: 0xffffff}));
             scene.add(el);
             const isPair = (i % 2 === 1);
-            let conf = { mesh: el, angle: isPair ? Math.PI : 0, speed: (0.02 + Math.random()*0.05) * (isPair ? -1 : 1) };
+            let conf = { mesh: el, angle: isPair ? Math.PI : 0, speed: (0.02 + Math.random()*0.03) * (isPair ? -1 : 1) };
 
-            if (i < 2) { conf.type='s'; conf.radius=shift + 1.0; if(i===0) addS(shift + 1.0, 0x00ffff); }
-            else if (i < 4) { conf.type='s'; conf.radius=shift + 3.0; if(i===2) addS(shift + 3.0, 0xff00ff); }
-            else if (i < 10) { conf.type='p'; conf.radius=shift + 2.5; conf.axIdx=(i-4)%3; }
-            else if (i < 12) { conf.type='s'; conf.radius=shift + 5.5; if(i===10) addS(shift + 5.5, 0x00ff00); }
-            else if (i < 18) { conf.type='p'; conf.radius=shift + 5.0; conf.axIdx=(i-12)%3; }
-            else if (i < 20) { conf.type='s'; conf.radius=shift + 8.5; if(i===18) addS(shift + 8.5, 0xffffff); }
-            else if (i < 30) { conf.type='d'; conf.radius=shift + 7.0; conf.axIdx=(i-20)%5; }
-            else if (i < 36) { conf.type='p'; conf.radius=shift + 11.0; conf.axIdx=(i-30)%3; }
-            else if (i < 38) { conf.type='s'; conf.radius=shift + 14.0; if(i===36) addS(shift + 14.0, 0xff0000); }
-            else { conf.type='d'; conf.radius=shift + 12.5; conf.axIdx=(i-38)%5; }
+            if (i < 2) { conf.type='s'; conf.radius=baseOffset; if(i===0) addS(baseOffset, 0x00ffff); }
+            else if (i < 4) { conf.type='s'; conf.radius=baseOffset + 2.5; if(i===2) addS(baseOffset + 2.5, 0xff00ff); }
+            else if (i < 10) { conf.type='p'; conf.radius=baseOffset + 2.0; conf.axIdx=(i-4)%3; }
+            else if (i < 12) { conf.type='s'; conf.radius=baseOffset + 5.0; if(i===10) addS(baseOffset + 5.0, 0x00ff00); }
+            else if (i < 18) { conf.type='p'; conf.radius=baseOffset + 4.5; conf.axIdx=(i-12)%3; }
+            else if (i < 20) { conf.type='s'; conf.radius=baseOffset + 8.0; if(i===18) addS(baseOffset + 8.0, 0xffffff); }
+            else if (i < 30) { conf.type='d'; conf.radius=baseOffset + 6.5; conf.axIdx=(i-20)%5; }
+            else if (i < 36) { conf.type='p'; conf.radius=baseOffset + 11.0; conf.axIdx=(i-30)%3; }
+            else if (i < 38) { conf.type='s'; conf.radius=baseOffset + 14.0; if(i===36) addS(baseOffset + 14.0, 0xff0000); }
+            else { conf.type='d'; conf.radius=baseOffset + 12.5; conf.axIdx=(i-38)%5; }
             
             electrons.push(conf);
         }
@@ -117,7 +119,6 @@
 
     function animate() {
         requestAnimationFrame(animate);
-        const globalRot = 0.002;
         electrons.forEach(el => {
             el.angle += el.speed;
             const r = el.radius;
@@ -126,11 +127,11 @@
                 const path = Math.sin(el.angle)*r, drift = Math.cos(el.angle)*0.5;
                 if(el.axIdx===0) el.mesh.position.set(path, drift, drift);
                 else if(el.axIdx===1) el.mesh.position.set(drift, path, drift);
-                else el.mesh.position.set(drift, drift, path);
+                else if(el.axIdx===2) el.mesh.position.set(drift, drift, path);
+                else el.mesh.position.set(path, height, Math.sin(el.angle)*2); // d-orbital variant
             }
-            el.mesh.position.applyAxisAngle(new THREE.Vector3(0,1,0), globalRot);
         });
-        atomGroup.rotation.y += globalRot;
+        atomGroup.rotation.y += 0.003;
         renderer.render(scene, camera);
     }
     animate();
