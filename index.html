@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>40 Element Model - Large Nucleus</title>
+    <title>Dynamic Nucleus Growth Model</title>
     <style>
         body { margin: 0; overflow: hidden; background: radial-gradient(circle, #0a0a0a, #000); font-family: sans-serif; }
         #ui { 
@@ -13,7 +13,7 @@
         }
         input { width: 100%; cursor: pointer; accent-color: #00ffcc; }
         #config { font-family: 'Courier New', monospace; color: #fff; margin: 5px 0; font-size: 1.1em; }
-        .spin-note { font-size: 10px; color: #ffaa00; text-transform: uppercase; letter-spacing: 1px; }
+        .info { font-size: 10px; color: #aaa; text-transform: uppercase; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -22,7 +22,7 @@
     <div id="name" style="font-weight:bold; font-size:1.6em; letter-spacing:2px;">HYDROGEN</div>
     <div id="config">1s¹</div>
     <input type="range" id="selector" min="1" max="40" value="1">
-    <div class="spin-note">Nucleus Scaled Up | Elements 1-40</div>
+    <div class="info">Nucleus Radius Scales with Atomic Mass</div>
 </div>
 
 <script type="importmap">
@@ -60,40 +60,33 @@
         "[Kr] 5s¹","[Kr] 5s²","[Kr] 4d¹ 5s²","[Kr] 4d² 5s²"
     ];
 
-    function createOrbitalLobe(radius, color, type) {
-        const group = new THREE.Group();
-        const scaleHeight = type === 'p' ? 2.4 : 1.8;
-        const lobeGeo = new THREE.SphereGeometry(radius*0.3, 20, 20);
-        lobeGeo.scale(1, scaleHeight, 1);
-        const mat = new THREE.MeshBasicMaterial({ color: color, wireframe: true, transparent: true, opacity: 0.08 });
-        
-        const t = new THREE.Mesh(lobeGeo, mat); t.position.y = radius * 0.5;
-        const b = new THREE.Mesh(lobeGeo, mat); b.position.y = -radius * 0.5;
-        group.add(t, b);
-        return group;
-    }
-
     function buildAtom(z) {
         while(atomGroup.children.length > 0) atomGroup.remove(atomGroup.children[0]);
         electrons.forEach(el => scene.remove(el.mesh));
         electrons = [];
 
-        // ENLARGED NUCLEUS
-        const nucGeo = new THREE.SphereGeometry(1.2, 32, 32);
+        // DYNAMIC NUCLEUS GROWTH
+        // Formula: Radius grows based on Z. 
+        // Hydrogen (1) starts at 0.6, Zirconium (40) reaches ~2.2
+        const nucRadius = 0.6 + (Math.sqrt(z) * 0.25);
+        const nucGeo = new THREE.SphereGeometry(nucRadius, 32, 32);
         const nucMat = new THREE.MeshStandardMaterial({
             color: 0xffffff,
             emissive: 0xffffff,
-            emissiveIntensity: 0.5
+            emissiveIntensity: 0.4
         });
         const nuc = new THREE.Mesh(nucGeo, nucMat);
         atomGroup.add(nuc);
-        
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
 
         const addS = (r, col) => {
             atomGroup.add(new THREE.Mesh(new THREE.SphereGeometry(r, 64, 64), new THREE.MeshBasicMaterial({color: col, wireframe: true, transparent: true, opacity: 0.04})));
         };
+
+        // Shift Shells based on Nucleus size to maintain gap
+        const shift = nucRadius * 1.5;
 
         for(let i=0; i<z; i++) {
             const el = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), new THREE.MeshBasicMaterial({color: 0xffffff}));
@@ -101,30 +94,16 @@
             const isPair = (i % 2 === 1);
             let conf = { mesh: el, angle: isPair ? Math.PI : 0, speed: (0.02 + Math.random()*0.05) * (isPair ? -1 : 1) };
 
-            if (i < 2) { conf.type='s'; conf.radius=3; if(i===0) addS(3, 0x00ffff); } // Increased inner radius to avoid nucleus overlap
-            else if (i < 4) { conf.type='s'; conf.radius=5; if(i===2) addS(5, 0xff00ff); }
-            else if (i < 10) { conf.type='p'; conf.radius=4.5; conf.axIdx=(i-4)%3; if(i===4) { 
-                const px=createOrbitalLobe(4.5, 0xffff00,'p'); px.rotation.z=Math.PI/2; atomGroup.add(px);
-                const py=createOrbitalLobe(4.5, 0xffff00,'p'); atomGroup.add(py);
-                const pz=createOrbitalLobe(4.5, 0xffff00,'p'); pz.rotation.x=Math.PI/2; atomGroup.add(pz);
-            }}
-            else if (i < 12) { conf.type='s'; conf.radius=7.5; if(i===10) addS(7.5, 0x00ff00); }
-            else if (i < 18) { conf.type='p'; conf.radius=7; conf.axIdx=(i-12)%3; if(i===12) {
-                const px=createOrbitalLobe(7, 0x00ff00,'p'); px.rotation.z=Math.PI/2; atomGroup.add(px);
-                const py=createOrbitalLobe(7, 0x00ff00,'p'); atomGroup.add(py);
-                const pz=createOrbitalLobe(7, 0x00ff00,'p'); pz.rotation.x=Math.PI/2; atomGroup.add(pz);
-            }}
-            else if (i < 20) { conf.type='s'; conf.radius=10.5; if(i===18) addS(10.5, 0xffffff); }
-            else if (i < 30) { conf.type='d'; conf.radius=9; conf.axIdx=(i-20)%5; 
-                if(i===20) addS(9, 0xffaa00);
-            }
-            else if (i < 36) { conf.type='p'; conf.radius=13; conf.axIdx=(i-30)%3;
-                if(i===30) addS(13, 0x5555ff);
-            }
-            else if (i < 38) { conf.type='s'; conf.radius=16; if(i===36) addS(16, 0xff0000); } 
-            else { conf.type='d'; conf.radius=14.5; conf.axIdx=(i-38)%5;
-                if(i===38) addS(14.5, 0xff5500);
-            }
+            if (i < 2) { conf.type='s'; conf.radius=shift + 1.0; if(i===0) addS(shift + 1.0, 0x00ffff); }
+            else if (i < 4) { conf.type='s'; conf.radius=shift + 3.0; if(i===2) addS(shift + 3.0, 0xff00ff); }
+            else if (i < 10) { conf.type='p'; conf.radius=shift + 2.5; conf.axIdx=(i-4)%3; }
+            else if (i < 12) { conf.type='s'; conf.radius=shift + 5.5; if(i===10) addS(shift + 5.5, 0x00ff00); }
+            else if (i < 18) { conf.type='p'; conf.radius=shift + 5.0; conf.axIdx=(i-12)%3; }
+            else if (i < 20) { conf.type='s'; conf.radius=shift + 8.5; if(i===18) addS(shift + 8.5, 0xffffff); }
+            else if (i < 30) { conf.type='d'; conf.radius=shift + 7.0; conf.axIdx=(i-20)%5; }
+            else if (i < 36) { conf.type='p'; conf.radius=shift + 11.0; conf.axIdx=(i-30)%3; }
+            else if (i < 38) { conf.type='s'; conf.radius=shift + 14.0; if(i===36) addS(shift + 14.0, 0xff0000); }
+            else { conf.type='d'; conf.radius=shift + 12.5; conf.axIdx=(i-38)%5; }
             
             electrons.push(conf);
         }
@@ -138,26 +117,19 @@
 
     function animate() {
         requestAnimationFrame(animate);
-        const globalRot = 0.002; // Restored slight orbital spin for better 3D depth
-        
+        const globalRot = 0.002;
         electrons.forEach(el => {
             el.angle += el.speed;
             const r = el.radius;
-            if(el.type==='s') {
-                el.mesh.position.set(Math.cos(el.angle)*r, Math.sin(el.angle)*r, 0);
-            } else if(el.type==='p') {
+            if(el.type==='s') el.mesh.position.set(Math.cos(el.angle)*r, Math.sin(el.angle)*r, 0);
+            else if(el.type==='p' || el.type==='d') {
                 const path = Math.sin(el.angle)*r, drift = Math.cos(el.angle)*0.5;
                 if(el.axIdx===0) el.mesh.position.set(path, drift, drift);
                 else if(el.axIdx===1) el.mesh.position.set(drift, path, drift);
                 else el.mesh.position.set(drift, drift, path);
-            } else {
-                const path = Math.cos(el.angle)*r;
-                const height = Math.sin(el.angle)*r;
-                el.mesh.position.set(path, height * 0.5, Math.sin(el.angle*2) * (r*0.3));
             }
             el.mesh.position.applyAxisAngle(new THREE.Vector3(0,1,0), globalRot);
         });
-        
         atomGroup.rotation.y += globalRot;
         renderer.render(scene, camera);
     }
